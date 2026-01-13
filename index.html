@@ -26,9 +26,36 @@
     h1 {
       text-align: center;
       color: white;
-      margin-bottom: 30px;
+      margin-bottom: 20px;
       font-size: 2.5em;
       text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    }
+
+    /* Google Sheet 按鈕樣式 */
+    .sheet-link-container {
+      text-align: center;
+      margin-bottom: 25px;
+    }
+    
+    .sheet-link-btn {
+      display: inline-block;
+      color: white; 
+      text-decoration: none; 
+      font-weight: bold;
+      border: 1px solid rgba(255,255,255,0.6); 
+      padding: 8px 20px; 
+      border-radius: 50px; 
+      background: rgba(255,255,255,0.15); 
+      backdrop-filter: blur(5px);
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      font-size: 0.95em;
+    }
+
+    .sheet-link-btn:hover {
+      background: rgba(255,255,255,0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 8px rgba(0,0,0,0.2);
     }
     
     .tabs {
@@ -258,6 +285,14 @@
   <div class="container">
     <h1>🔥 動火管理系統</h1>
     
+    <div class="sheet-link-container">
+      <a href="https://docs.google.com/spreadsheets/d/11p0DgmzBb3eBzAO8w8A5lR-vNGMFBMYyCOOzMwOe_W0/edit?gid=1052086617#gid=1052086617" 
+         target="_blank" 
+         class="sheet-link-btn">
+        📊 查看完整資料 (Google Sheet)
+      </a>
+    </div>
+
     <div class="tabs">
       <button class="tab active" onclick="switchTab('pre')">動火前</button>
       <button class="tab" onclick="switchTab('during')">動火中</button>
