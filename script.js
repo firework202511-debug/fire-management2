@@ -395,46 +395,6 @@ function handleSubmitError(err) {
 }
 
 // ================== 查詢功能邏輯 ==================
-async function searchRecords() {
-  const dateInput = document.getElementById('queryDate');
-  const companyInput = document.getElementById('queryCompany');
-  const resultsDiv = document.getElementById('queryResults');
-  const loadingEl = document.getElementById('queryLoading');
-  
-  const date = dateInput.value;
-  const company = companyInput.value;
-  
-  if (!date) {
-    alert('請選擇查詢日期');
-    return;
-  }
-  
-  loadingEl.style.display = 'block';
-  resultsDiv.innerHTML = '';
-  
-  try {
-    const url = new URL(`${CONFIG.API_ENDPOINT}/api/search-records`);
-    url.searchParams.append('date', date);
-    if (company) {
-      url.searchParams.append('company', company);
-    }
-    
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error('查詢失敗');
-    }
-    
-    const json = await response.json();
-    renderSearchResults(json.data);
-    
-  } catch (err) {
-    console.error('查詢錯誤:', err);
-    resultsDiv.innerHTML = '<div class="no-results">❌ 查詢發生錯誤，請稍後再試</div>';
-  } finally {
-    loadingEl.style.display = 'none';
-  }
-}
-
 function renderSearchResults(data) {
   const resultsDiv = document.getElementById('queryResults');
   
@@ -452,6 +412,8 @@ function renderSearchResults(data) {
           <th>工程名稱</th>
           <th>時間</th>
           <th>地點</th>
+          <th>照片1</th>
+          <th>照片2</th>
         </tr>
       </thead>
       <tbody>
@@ -463,6 +425,15 @@ function renderSearchResults(data) {
     else if (item.type === '動火中') badgeClass = 'badge-during';
     else if (item.type === '動火後') badgeClass = 'badge-after';
     
+    // 處理照片顯示邏輯：有連結顯示相機圖示，無連結顯示 -
+    const photo1Html = item.photo1 
+      ? `<a href="${item.photo1}" target="_blank" class="photo-link" title="點擊查看照片">📷</a>` 
+      : '-';
+      
+    const photo2Html = item.photo2 
+      ? `<a href="${item.photo2}" target="_blank" class="photo-link" title="點擊查看照片">📷</a>` 
+      : '-';
+
     html += `
       <tr>
         <td data-label="上傳時機"><span class="badge ${badgeClass}">${item.type}</span></td>
@@ -470,6 +441,8 @@ function renderSearchResults(data) {
         <td data-label="工程名稱">${item.project}</td>
         <td data-label="時間">${item.time}</td>
         <td data-label="地點">${item.location}</td>
+        <td data-label="照片1">${photo1Html}</td>
+        <td data-label="照片2">${photo2Html}</td>
       </tr>
     `;
   });
@@ -477,7 +450,6 @@ function renderSearchResults(data) {
   html += '</tbody></table>';
   resultsDiv.innerHTML = html;
 }
-
 // ================== 初始化所有表單 ==================
 Object.values(FORM_CONFIGS).forEach(setupFormSubmit);
 // 頁面載入時初始化
@@ -485,4 +457,5 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initApp);
 } else {
   initApp();
+
 }
