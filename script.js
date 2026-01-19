@@ -394,89 +394,45 @@ function handleSubmitError(err) {
   alert('❌ 送出失敗：' + (err.message || '未知錯誤'));
 }
 
-// ================== 查詢功能邏輯 ==================
+// [修改] 查詢功能：顯示照片圖示
 async function searchRecords() {
-  const dateInput = document.getElementById('queryDate');
-  const companyInput = document.getElementById('queryCompany');
-  const resultsDiv = document.getElementById('queryResults');
-  const loadingEl = document.getElementById('queryLoading');
-  
-  const date = dateInput.value;
-  const company = companyInput.value;
-  
-  if (!date) {
-    alert('請選擇查詢日期');
-    return;
-  }
-  
-  loadingEl.style.display = 'block';
-  resultsDiv.innerHTML = '';
+  const date = val('queryDate');
+  const company = val('queryCompany');
+  const div = document.getElementById('queryResults');
+  document.getElementById('queryLoading').style.display = 'block'; div.innerHTML = '';
   
   try {
     const url = new URL(`${CONFIG.API_ENDPOINT}/api/search-records`);
     url.searchParams.append('date', date);
-    if (company) {
-      url.searchParams.append('company', company);
-    }
+    if(company) url.searchParams.append('company', company);
     
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error('查詢失敗');
-    }
+    const res = await fetch(url);
+    const json = await res.json();
     
-    const json = await response.json();
-    renderSearchResults(json.data);
-    
-  } catch (err) {
-    console.error('查詢錯誤:', err);
-    resultsDiv.innerHTML = '<div class="no-results">❌ 查詢發生錯誤，請稍後再試</div>';
-  } finally {
-    loadingEl.style.display = 'none';
-  }
+    if(!json.data || json.data.length === 0) { div.innerHTML = '<div style="text-align:center;padding:20px">查無資料</div>'; return; }
+
+    let html = `<table class="result-table"><thead><tr><th>時機</th><th>公司</th><th>工程</th><th>時間</th><th>地點</th><th>照片1</th><th>照片2</th></tr></thead><tbody>`;
+    json.data.forEach(Row => {
+      const badge = Row.type==='動火前'?'badge-pre':(Row.type==='動火中'?'badge-during':'badge-after');
+      const p1 = Row.photo1 ? `<a href="${Row.photo1}" target="_blank" class="photo-icon" title="預覽">📷</a>` : '-';
+      const p2 = Row.photo2 ? `<a href="${Row.photo2}" target="_blank" class="photo-icon" title="預覽">📷</a>` : '-';
+      html += `<tr>
+        <td data-label="時機"><span class="badge ${badge}">${Row.type}</span></td>
+        <td data-label="公司">${Row.company}</td>
+        <td data-label="工程">${Row.project}</td>
+        <td data-label="時間">${Row.time.split(' ')[1]} ${Row.time.split(' ')[2]}</td>
+        <td data-label="地點">${Row.location}</td>
+        <td data-label="照片1">${p1}</td>
+        <td data-label="照片2">${p2}</td>
+      </tr>`;
+    });
+    div.innerHTML = html + '</tbody></table>';
+  } catch(e) { console.error(e); alert('查詢錯誤'); }
+  finally { document.getElementById('queryLoading').style.display = 'none'; }
 }
 
-function renderSearchResults(data) {
-  const resultsDiv = document.getElementById('queryResults');
-  
-  if (!data || data.length === 0) {
-    resultsDiv.innerHTML = '<div class="no-results">查無資料</div>';
-    return;
-  }
-  
-  let html = `
-    <table class="result-table">
-      <thead>
-        <tr>
-          <th>上傳時機</th>
-          <th>公司名稱</th>
-          <th>工程名稱</th>
-          <th>時間</th>
-          <th>地點</th>
-        </tr>
-      </thead>
-      <tbody>
-  `;
-  
-  data.forEach(item => {
-    let badgeClass = '';
-    if (item.type === '動火前') badgeClass = 'badge-pre';
-    else if (item.type === '動火中') badgeClass = 'badge-during';
-    else if (item.type === '動火後') badgeClass = 'badge-after';
-    
-    html += `
-      <tr>
-        <td data-label="上傳時機"><span class="badge ${badgeClass}">${item.type}</span></td>
-        <td data-label="公司名稱">${item.company}</td>
-        <td data-label="工程名稱">${item.project}</td>
-        <td data-label="時間">${item.time}</td>
-        <td data-label="地點">${item.location}</td>
-      </tr>
-    `;
-  });
-  
-  html += '</tbody></table>';
-  resultsDiv.innerHTML = html;
-}
+function val(id) { return document.getElementById(id)?.value || ''; }
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', initApp); else initApp();
 
 // ================== 初始化所有表單 ==================
 Object.values(FORM_CONFIGS).forEach(setupFormSubmit);
@@ -486,3 +442,4 @@ if (document.readyState === 'loading') {
 } else {
   initApp();
 }
+
