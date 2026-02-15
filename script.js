@@ -22,18 +22,31 @@ const FORM_CONFIGS = {
       { inputId: 'prePhoto2', statusId: 'prePhoto2Status' }
     ],
     statusIds: ['prePhoto1Status', 'prePhoto2Status', 'preFormMsg'],
+    // [新增] 必填驗證邏輯
+    validate: () => {
+      const checked = document.querySelectorAll('#preItemsContainer input:checked');
+      if (checked.length === 0) {
+        alert('請至少選擇一個動火項目！');
+        return false;
+      }
+      return true;
+    },
     getPayload: () => ({
       company: getFieldValue('preCompany'),
       inputCompany: getFieldValue('preInputCompany'),
       project: getFieldValue('preProject'),
       inputProject: getFieldValue('preInputProject'),
-      department: getFieldValue('preDepartment'),
+      uploader: getFieldValue('preUploader'),
+      // 將組別與課別合併
+      department: getFieldValue('preGroup') + ' ' + getFieldValue('preSection'),
       startTime: getFieldValue('preStartTime'),
       endTime: getFieldValue('preEndTime'),
       area: getFieldValue('preArea'),
       location: getFieldValue('preLocation'),
       restricted: getFieldValue('preRestricted'),
-      items: getFieldValue('preItems')
+      // [修改] 抓取 checkbox 的值並合併
+      items: Array.from(document.querySelectorAll('#preItemsContainer input:checked'))
+              .map(cb => cb.value).join('、')
     })
   },
   during: {
@@ -48,6 +61,7 @@ const FORM_CONFIGS = {
     getPayload: () => ({
       company: getFieldValue('duringCompany'),
       project: getFieldValue('duringProject'),
+      location: getFieldValue('duringLocation'), 
       q1: getFieldValue('q1')
     })
   },
@@ -63,6 +77,7 @@ const FORM_CONFIGS = {
     getPayload: () => ({
       company: getFieldValue('afterCompany'),
       project: getFieldValue('afterProject'),
+      location: getFieldValue('afterLocation'),
       qTime: getFieldValue('qTime'),
       qYesNo: getFieldValue('qYesNo')
     })
@@ -112,12 +127,9 @@ async function initApp() {
     
     const data = await response.json();
     initDropdowns(data);
-    
-    // 設定預設查詢日期為今天
     const today = new Date().toISOString().split('T')[0];
     const queryDateEl = document.getElementById('queryDate');
     if (queryDateEl) queryDateEl.value = today;
-
   } catch (err) {
     console.error('初始化失敗:', err);
     alert('載入下拉選單失敗，請重新整理頁面');
@@ -125,31 +137,60 @@ async function initApp() {
 }
 
 function initDropdowns(data) {
-  const { companies, areas, items } = data;
+  const { companies, areas, items, groups } = data;
   
-  // 填入所有表單的公司選單，包含查詢表單
   ['preCompany', 'duringCompany', 'afterCompany', 'queryCompany'].forEach(id => {
     fillSelect(id, Object.keys(companies));
   });
   
   fillSelect('preArea', areas);
-  fillSelect('preItems', items);
   
+  // [修改] 改用 fillCheckboxGroup 填入動火項目
+  fillCheckboxGroup('preItemsContainer', items);
+  
+  if (groups) {
+    fillSelect('preGroup', Object.keys(groups));
+    setupGroupSectionLinks(groups);
+  }
+
   setupCompanyProjectLinks(companies);
+  setupLocationFetcher();
 }
 
 function fillSelect(id, options) {
   const el = document.getElementById(id);
   if (!el) return;
-  
-  // 保留第一項 "請選擇"
   el.innerHTML = '<option value="">請選擇</option>';
   options.forEach(opt => el.add(new Option(opt, opt)));
-  
-  // 查詢表單不需要「其他」選項
-  if (id !== 'queryCompany') {
+  if (id !== 'queryCompany' && id !== 'preGroup' && id !== 'preSection') {
     el.add(new Option('其他', '其他'));
   }
+}
+
+// [新增] 產生 Checkbox 群組
+function fillCheckboxGroup(containerId, options) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = ''; // 清空載入中文字
+  
+  if (!options || options.length === 0) {
+    container.innerHTML = '<div style="color:#888; grid-column: 1/-1;">無可用項目 (請檢查 Sheet 資料)</div>';
+    return;
+  }
+
+  options.forEach(opt => {
+    const label = document.createElement('label');
+    label.className = 'checkbox-label';
+    
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.value = opt;
+    input.name = 'preItemsCheckbox'; // 方便辨識
+    
+    label.appendChild(input);
+    label.appendChild(document.createTextNode(opt));
+    container.appendChild(label);
+  });
 }
 
 function setupCompanyProjectLinks(companies) {
@@ -165,6 +206,69 @@ function setupCompanyProjectLinks(companies) {
     companyEl.addEventListener('change', () => {
       const projects = companies[companyEl.value] || [];
       fillSelect(project, projects);
+    });
+  });
+}
+
+function setupGroupSectionLinks(groups) {
+    const groupEl = document.getElementById('preGroup');
+    const sectionEl = document.getElementById('preSection');
+    
+    if(!groupEl || !sectionEl) return;
+    groupEl.addEventListener('change', () => {
+        const selectedGroup = groupEl.value;
+        const sections = groups[selectedGroup] || [];
+        sectionEl.innerHTML = '<option value="">請選擇</option>';
+        sections.forEach(sec => {
+            sectionEl.add(new Option(sec, sec));
+        });
+    });
+}
+
+function setupLocationFetcher() {
+  const configs = [
+    { companyId: 'duringCompany', projectId: 'duringProject', locationId: 'duringLocation' },
+    { companyId: 'afterCompany', projectId: 'afterProject', locationId: 'afterLocation' }
+  ];
+  configs.forEach(({ companyId, projectId, locationId }) => {
+    const projectEl = document.getElementById(projectId);
+    const companyEl = document.getElementById(companyId);
+    
+    projectEl.addEventListener('change', async () => {
+      const company = companyEl.value;
+      const project = projectEl.value;
+      const locationEl = document.getElementById(locationId);
+      
+      if (!company || !project) {
+        locationEl.innerHTML = '<option value="">請先選擇公司與工程</option>';
+        return;
+      }
+
+      locationEl.innerHTML = '<option value="">搜尋中...</option>';
+      locationEl.disabled = true;
+
+      try {
+        const url = new URL(`${CONFIG.API_ENDPOINT}/api/get-today-locations`);
+        url.searchParams.append('company', company);
+        url.searchParams.append('project', project);
+
+        const res = await fetch(url);
+        const data = await res.json();
+        
+        locationEl.innerHTML = '<option value="">請選擇地點</option>';
+        if (data.locations && data.locations.length > 0) {
+          data.locations.forEach(loc => {
+            locationEl.add(new Option(loc, loc));
+          });
+        } else {
+          locationEl.add(new Option('查無今日動火前紀錄', ''));
+        }
+      } catch (err) {
+        console.error('地點載入失敗', err);
+        locationEl.innerHTML = '<option value="">載入失敗</option>';
+      } finally {
+        locationEl.disabled = false;
+      }
     });
   });
 }
@@ -188,7 +292,6 @@ function calculateDimensions(width, height, maxWidth) {
   };
 }
 
-// 漸進式壓縮
 async function resizeImageProgressive(file, quality = CONFIG.JPEG_QUALITY) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
@@ -196,27 +299,15 @@ async function resizeImageProgressive(file, quality = CONFIG.JPEG_QUALITY) {
     }, CONFIG.COMPRESSION_TIMEOUT);
 
     const reader = new FileReader();
-    
     reader.onload = e => {
       const img = new Image();
-      
       img.onload = () => {
         try {
-          const { width, height } = calculateDimensions(
-            img.width, 
-            img.height, 
-            CONFIG.MAX_WIDTH
-          );
-          
+          const { width, height } = calculateDimensions(img.width, img.height, CONFIG.MAX_WIDTH);
           const canvas = document.createElement('canvas');
           canvas.width = width;
           canvas.height = height;
-          
-          const ctx = canvas.getContext('2d', { 
-            alpha: false,
-            willReadFrequently: false 
-          });
-          
+          const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: false });
           ctx.imageSmoothingEnabled = true;
           ctx.imageSmoothingQuality = 'medium';
           ctx.drawImage(img, 0, 0, width, height);
@@ -233,39 +324,25 @@ async function resizeImageProgressive(file, quality = CONFIG.JPEG_QUALITY) {
           reject(err);
         }
       };
-      
-      img.onerror = () => {
-        clearTimeout(timeout);
-        reject(new Error('無法載入圖片'));
-      };
-      
+      img.onerror = () => { clearTimeout(timeout); reject(new Error('無法載入圖片')); };
       img.src = e.target.result;
     };
-    
-    reader.onerror = () => {
-      clearTimeout(timeout);
-      reject(new Error('讀取檔案錯誤'));
-    };
-    
+    reader.onerror = () => { clearTimeout(timeout); reject(new Error('讀取檔案錯誤')); };
     reader.readAsDataURL(file);
   });
 }
 
-// 智能重試上傳
 async function uploadWithSmartRetry(file, statusId) {
   let quality = CONFIG.JPEG_QUALITY;
   for (let attempt = 1; attempt <= CONFIG.RETRY_COUNT; attempt++) {
     try {
       updateStatus(statusId, `${attempt > 1 ? '重試' : '處理'}中 (${Math.round(quality * 100)}%)...`);
       const { dataUrl, mime, filename } = await resizeImageProgressive(file, quality);
-      const result = await uploadQueue.add(() => 
-        uploadToServer(dataUrl, mime, filename, statusId, attempt)
-      );
+      const result = await uploadQueue.add(() => uploadToServer(dataUrl, mime, filename, statusId, attempt));
       if (result?.success) {
         updateStatus(statusId, '✅ 成功');
         return result.url;
       }
-      
       throw new Error(result?.error || '上傳失敗');
     } catch (err) {
       console.warn(`上傳嘗試 ${attempt} 失敗:`, err.message);
@@ -273,14 +350,12 @@ async function uploadWithSmartRetry(file, statusId) {
         updateStatus(statusId, '❌ 失敗');
         throw new Error(`上傳失敗（已重試 ${CONFIG.RETRY_COUNT} 次）`);
       }
-      
       quality = Math.max(CONFIG.MIN_QUALITY, quality - 0.1);
       await new Promise(r => setTimeout(r, CONFIG.RETRY_DELAY_BASE * Math.pow(1.5, attempt - 1)));
     }
   }
 }
 
-// 上傳到伺服器 (Cloudflare Worker)
 async function uploadToServer(dataUrl, mime, filename, statusId, attempt) {
   const startTime = Date.now();
   try {
@@ -292,11 +367,9 @@ async function uploadToServer(dataUrl, mime, filename, statusId, attempt) {
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
-    
     const result = await response.json();
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`上傳成功 (${duration}s):`, filename);
-    
     return result;
   } catch (err) {
     console.error(`上傳失敗 (嘗試 ${attempt}):`, err);
@@ -304,7 +377,6 @@ async function uploadToServer(dataUrl, mime, filename, statusId, attempt) {
   }
 }
 
-// 批量處理照片
 async function batchProcessPhotos(photos) {
   const results = [];
   for (const photo of photos) {
@@ -313,7 +385,6 @@ async function batchProcessPhotos(photos) {
       results.push(null);
       continue;
     }
-    
     try {
       const url = await uploadWithSmartRetry(input.files[0], photo.statusId);
       results.push(url);
@@ -322,7 +393,6 @@ async function batchProcessPhotos(photos) {
       throw err;
     }
   }
-  
   return results;
 }
 
@@ -336,6 +406,11 @@ function setupFormSubmit(config) {
   form.addEventListener('submit', async e => {
     e.preventDefault();
     
+    // [新增] 執行自定義驗證
+    if (config.validate && !config.validate()) {
+      return;
+    }
+    
     if (loadingEl) loadingEl.style.display = 'inline-block';
     setSubmitButtonState(submitBtn, true);
     
@@ -343,7 +418,6 @@ function setupFormSubmit(config) {
     
     try {
       const photoUrls = await batchProcessPhotos(config.photos);
-      
       const payload = config.getPayload();
       payload.photoUrls = photoUrls;
       
@@ -379,7 +453,6 @@ async function submitToBackend(apiPath, payload) {
     const error = await response.json();
     throw new Error(error.error || '提交失敗');
   }
-  
   return response.json();
 }
 
@@ -394,7 +467,6 @@ function handleSubmitError(err) {
   alert('❌ 送出失敗：' + (err.message || '未知錯誤'));
 }
 
-// [修改] 查詢功能：顯示照片圖示
 async function searchRecords() {
   const date = val('queryDate');
   const company = val('queryCompany');
@@ -408,7 +480,6 @@ async function searchRecords() {
     
     const res = await fetch(url);
     const json = await res.json();
-    
     if(!json.data || json.data.length === 0) { div.innerHTML = '<div style="text-align:center;padding:20px">查無資料</div>'; return; }
 
     let html = `<table class="result-table"><thead><tr><th>時機</th><th>公司</th><th>工程</th><th>時間</th><th>地點</th><th>照片1</th><th>照片2</th></tr></thead><tbody>`;
@@ -428,18 +499,15 @@ async function searchRecords() {
     });
     div.innerHTML = html + '</tbody></table>';
   } catch(e) { console.error(e); alert('查詢錯誤'); }
-  finally { document.getElementById('queryLoading').style.display = 'none'; }
+  finally { document.getElementById('queryLoading').style.display = 'none';
+  }
 }
 
 function val(id) { return document.getElementById(id)?.value || ''; }
-if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', initApp); else initApp();
-
-// ================== 初始化所有表單 ==================
-Object.values(FORM_CONFIGS).forEach(setupFormSubmit);
-// 頁面載入時初始化
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initApp);
 } else {
   initApp();
 }
 
+Object.values(FORM_CONFIGS).forEach(setupFormSubmit);
