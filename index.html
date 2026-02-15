@@ -128,6 +128,41 @@
       outline: none;
       border-color: #667eea;
     }
+
+    /* [新增] 核選方塊區域樣式 */
+    .checkbox-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+      padding: 15px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      background: #fafafa;
+    }
+    
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 0.95em;
+      padding: 5px;
+      border-radius: 4px;
+      transition: background 0.2s;
+      user-select: none;
+    }
+    
+    .checkbox-label:hover {
+      background: #eef2ff;
+    }
+    
+    .checkbox-label input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+      accent-color: #667eea;
+      cursor: pointer;
+    }
     
     .photo-upload {
       border: 2px dashed #ccc;
@@ -247,9 +282,8 @@
         grid-template-columns: 1fr;
       }
       
-      /* 手機版表格優化：轉為卡片式 */
       .result-table, .result-table thead, .result-table tbody, .result-table th, .result-table td, .result-table tr { 
-        display: block; 
+        display: block;
       }
       .result-table thead tr { 
         position: absolute;
@@ -257,7 +291,7 @@
         left: -9999px;
       }
       .result-table tr { 
-        border: 1px solid #ccc; 
+        border: 1px solid #ccc;
         margin-bottom: 10px;
         border-radius: 8px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.05);
@@ -325,10 +359,26 @@
           <label>其他工程名稱（若上方選「其他」）</label>
           <input type="text" id="preInputProject">
         </div>
-        
+
         <div class="form-group">
-          <label>主辦單位 *</label>
-          <input type="text" id="preDepartment" required>
+  <label>上傳者姓名 *</label>
+  <input type="text" id="preUploader" required placeholder="請輸入姓名">
+</div>
+        
+        <div class="row">
+            <div class="form-group">
+                <label>主辦組別 *</label>
+                <select id="preGroup" required>
+                    <option value="">請選擇</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>主辦課別 *</label>
+                <select id="preSection" required>
+                    <option value="">請先選擇組別</option>
+                </select>
+            </div>
         </div>
         
         <div class="row">
@@ -365,10 +415,10 @@
        </div>
         
         <div class="form-group">
-          <label>動火項目 *</label>
-          <select id="preItems" required>
-            <option value="">請選擇</option>
-          </select>
+          <label>動火項目 (可複選) *</label>
+          <div id="preItemsContainer" class="checkbox-container">
+            <div style="color: #666; font-size: 0.9em; padding: 10px;">載入中...</div>
+          </div>
         </div>
         
         <div class="form-group">
@@ -410,6 +460,13 @@
           <label>工程名稱 *</label>
           <select id="duringProject" required>
             <option value="">請先選擇公司</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>動火地點 (連動今日動火前資料) *</label>
+          <select id="duringLocation" required>
+            <option value="">請先選擇公司與工程</option>
           </select>
         </div>
          
@@ -464,6 +521,13 @@
           </select>
         </div>
         
+        <div class="form-group">
+          <label>動火地點 (連動今日動火前資料) *</label>
+          <select id="afterLocation" required>
+            <option value="">請先選擇公司與工程</option>
+          </select>
+        </div>
+
         <div class="form-group">
           <label>作業結束時間 *</label>
           <input type="datetime-local" id="qTime" required>
@@ -528,19 +592,12 @@
   
   <script>
     function switchTab(tab) {
-      // 切換標籤樣式
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       event.target.classList.add('active');
-      
-      // 切換表單顯示
       document.querySelectorAll('.form-container').forEach(c => c.classList.remove('active'));
       document.getElementById(tab + 'FormContainer').classList.add('active');
     }
   </script>
-  
   <script src="script.js"></script>
 </body>
 </html>
-
-
-
