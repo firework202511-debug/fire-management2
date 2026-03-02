@@ -1,3 +1,4 @@
+
 //================== 全域設定 ==================
 const CONFIG = {
   MAX_WIDTH: 1024,
@@ -467,12 +468,60 @@ function handleSubmitError(err) {
   alert('❌ 送出失敗：' + (err.message || '未知錯誤'));
 }
 
+// ================== 後台管理邏輯 ==================
+let isAdmin = false;
+
+function adminLogin() {
+  const acc = document.getElementById('adminAcc').value;
+  const pwd = document.getElementById('adminPwd').value;
+  if (acc === 'admin' && pwd === 'safe1234') {
+    isAdmin = true;
+    document.getElementById('loginFormUI').style.display = 'none';
+    document.getElementById('adminStatusUI').style.display = 'flex';
+    document.getElementById('adminAcc').value = ''; document.getElementById('adminPwd').value = '';
+    alert('登入成功！已解鎖刪除功能。');
+    if (document.getElementById('queryResults').innerHTML !== '') searchRecords();
+  } else { alert('帳號或密碼錯誤！'); }
+}
+
+function adminLogout() {
+  isAdmin = false;
+  document.getElementById('loginFormUI').style.display = 'flex';
+  document.getElementById('adminStatusUI').style.display = 'none';
+  alert('已登出管理員模式。');
+  if (document.getElementById('queryResults').innerHTML !== '') searchRecords();
+}
+
+async function deleteRecord(sheetType, rowIndex) {
+  if (!confirm('⚠️ 警告：確定要刪除這筆紀錄嗎？這將會清除雲端資料庫中的資料，且無法復原！')) return;
+  try {
+    const res = await fetch(`${CONFIG.API_ENDPOINT}/api/admin/delete-record`, {
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sheetType, rowIndex })
+    });
+    
+    const data = await res.json(); // 取得後端詳細的回傳資訊
+    
+    if (!res.ok) {
+        // 如果失敗，拋出後端寫明的具體錯誤原因
+        throw new Error(data.error || '未知錯誤');
+    }
+    
+    alert('✅ 資料已成功刪除');
+    searchRecords(); 
+  } catch (err) { 
+    alert('❌ 刪除發生錯誤: ' + err.message); 
+  }
+}
+
+// ================== 查詢邏輯 ==================
 async function searchRecords() {
   const date = val('queryDate');
   const company = val('queryCompany');
   const div = document.getElementById('queryResults');
   
-  // [修改] 驗證邏輯：兩者不能同時為空
+  // 驗證邏輯：兩者不能同時為空
   if (!date && !company) {
     alert('請至少輸入「查詢日期」或選擇「公司名稱」');
     return;
@@ -483,26 +532,41 @@ async function searchRecords() {
   
   try {
     const url = new URL(`${CONFIG.API_ENDPOINT}/api/search-records`);
-    // [修改] 只有當參數有值時才 append
+    // 只有當參數有值時才 append
     if (date) url.searchParams.append('date', date);
     if (company) url.searchParams.append('company', company);
     
     const res = await fetch(url);
     const json = await res.json();
     
-    if (json.error) { throw new Error(json.error); } // 處理後端拋出的錯誤
+    if (json.error) { throw new Error(json.error); } 
 
     if(!json.data || json.data.length === 0) { 
         div.innerHTML = '<div style="text-align:center;padding:20px">查無資料</div>'; 
         return; 
     }
 
-    let html = `<table class="result-table"><thead><tr><th>時機</th><th>公司</th><th>工程</th><th>主辦姓名</th><th>時間</th><th>地點</th><th>照片1</th><th>照片2</th></tr></thead><tbody>`;
+    // 判斷如果是管理員，表頭增加「操作」欄位
+    let tableHead = `<tr><th>時機</th><th>公司</th><th>工程</th><th>主辦姓名</th><th>時間</th><th>地點</th><th>照片1</th><th>照片2</th>`;
+    if (isAdmin) tableHead += `<th>操作 (管理員)</th>`;
+    tableHead += `</tr>`;
+    
+    let html = `<table class="result-table"><thead>${tableHead}</thead><tbody>`;
     
     json.data.forEach(Row => {
       const badge = Row.type==='動火前'?'badge-pre':(Row.type==='動火中'?'badge-during':'badge-after');
       const p1 = Row.photo1 ? `<a href="${Row.photo1}" target="_blank" class="photo-icon" title="預覽">📷</a>` : '-';
       const p2 = Row.photo2 ? `<a href="${Row.photo2}" target="_blank" class="photo-icon" title="預覽">📷</a>` : '-';
+      
+      // ✅ 這裡修復了遺失的括號與結尾標籤
+      let adminActions = '';
+      if (isAdmin) {
+        adminActions = `<td data-label="操作">
+          <button onclick="deleteRecord('${Row.sheetType}', ${Row.rowIndex})" style="background:#e53e3e; color:white; padding:4px 8px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:0.9em; width:100%;">刪除</button>
+        </td>`;
+      }
+
+      // ✅ 這裡補回了 ${adminActions} 讓刪除按鈕顯示出來
       html += `<tr>
         <td data-label="時機"><span class="badge ${badge}">${Row.type}</span></td>
         <td data-label="公司">${Row.company}</td>
@@ -512,6 +576,7 @@ async function searchRecords() {
         <td data-label="地點">${Row.location}</td>
         <td data-label="照片1">${p1}</td>
         <td data-label="照片2">${p2}</td>
+        ${adminActions}
       </tr>`;
     });
     div.innerHTML = html + '</tbody></table>';
@@ -532,3 +597,8 @@ if (document.readyState === 'loading') {
 }
 
 Object.values(FORM_CONFIGS).forEach(setupFormSubmit);
+
+
+
+
+
