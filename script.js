@@ -789,6 +789,8 @@ async function checkIncomplete() {
 }
 
 
+function val(id) { return document.getElementById(id)?.value || ''; }
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initApp);
 } else {
